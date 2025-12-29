@@ -47,72 +47,23 @@ export const useArticle = (id: string) => {
     enabled: !!id,
   });
 };
-// export const useCreateArticle = () => {
-//   const queryClient = useQueryClient();
-
-//   return useMutation({
-//     mutationFn: async (articleData: CreateArticleData) => {
-//       const { data, error } = await supabase
-//         .from('articles')
-//         .insert(articleData)
-//         .select()
-//         .single();
-
-//       if (error) {
-//         console.error('Insert error:', error);
-//         throw error;
-//       }
-
-//       return data as Article;
-//     },
-
-//     onSuccess: () => {
-//       queryClient.invalidateQueries({ queryKey: ['articles'] });
-//       toast({
-//         title: 'Article créé',
-//         description: 'Votre article a été publié avec succès.',
-//       });
-//     },
-
-//     onError: (error) => {
-//       console.error('Error creating article:', error);
-//       toast({
-//         title: 'Erreur',
-//         description: "Impossible de créer l'article. Veuillez réessayer.",
-//         variant: 'destructive',
-//       });
-//     },
-//   });
-// };
-
-
 export const useCreateArticle = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (articleData: CreateArticleData) => {
-      // Récupérer la session pour avoir le JWT
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
+      const { data, error } = await supabase
+        .from('articles')
+        .insert(articleData)
+        .select()
+        .single();
 
-      if (sessionError || !session) {
-        throw new Error('Utilisateur non authentifié');
+      if (error) {
+        console.error('Insert error:', error);
+        throw error;
       }
-      const response = await fetch("https://ddoocgpbnozlgazjojtf.supabase.co/functions/v1/create-article", {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(articleData),
-      });
 
-
-
-
-      return response.json();
+      return data as Article;
     },
 
     onSuccess: () => {
