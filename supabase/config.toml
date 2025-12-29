@@ -1,0 +1,4 @@
+project_id = "jzbjledwlmzoggrwlxqh"
+
+[functions.create-article]
+verify_jwt = true
