@@ -100,7 +100,7 @@ export const useCreateArticle = () => {
       if (sessionError || !session) {
         throw new Error('Utilisateur non authentifié');
       }
-      const response = await fetch("https://fvqcuudsrtrzmllaxbzg.supabase.co/functions/v1/create-article", {
+      const response = await fetch("https://ddoocgpbnozlgazjojtf.supabase.co/functions/v1/create-article", {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
