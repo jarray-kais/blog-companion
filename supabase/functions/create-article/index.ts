@@ -67,13 +67,14 @@ serve(async (req) => {
 
     console.log('Creating article:', { titre, auteur, userId: user.id });
 
-    // Insert the article
+    // Insert the article with ownership
     const { data, error } = await supabase
       .from('articles')
       .insert({
         titre,
         contenu,
         auteur,
+        user_id: user.id, // Enregistre le créateur
       })
       .select()
       .single();
