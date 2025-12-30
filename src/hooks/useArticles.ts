@@ -62,7 +62,7 @@ export const useCreateArticle = () => {
       }
 
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-article`,
+        "https://ddoocgpbnozlgazjojtf.supabase.co/functions/v1/create-article",
         {
           method: 'POST',
           headers: {
