@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
+/**
+ * Représente la structure d'un article de blog.
+ */
 export interface Article {
   id: string;
   titre: string;
@@ -10,12 +13,19 @@ export interface Article {
   date_creation: string;
 }
 
+/**
+ * Données requises pour la création d'un nouvel article.
+ */
 export interface CreateArticleData {
   titre: string;
   contenu: string;
   auteur: string;
 }
 
+/**
+ * Hook pour récupérer la liste de tous les articles.
+ * Les articles sont triés par date de création décroissante.
+ */
 export const useArticles = () => {
   return useQuery({
     queryKey: ["articles"],
@@ -31,6 +41,10 @@ export const useArticles = () => {
   });
 };
 
+/**
+ * Hook pour récupérer un article spécifique par son ID.
+ * @param id L'identifiant unique de l'article.
+ */
 export const useArticle = (id: string) => {
   return useQuery({
     queryKey: ["articles", id],
@@ -47,11 +61,18 @@ export const useArticle = (id: string) => {
     enabled: !!id,
   });
 };
+
+/**
+ * Hook pour créer un nouvel article.
+ * Utilise une Supabase Edge Function pour gérer la création de manière sécurisée.
+ * Nécessite que l'utilisateur soit authentifié.
+ */
 export const useCreateArticle = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (articleData: CreateArticleData) => {
+      // Vérification de la session active avant l'appel
       const {
         data: { session },
         error: sessionError,
@@ -61,6 +82,7 @@ export const useCreateArticle = () => {
         throw new Error('Utilisateur non authentifié');
       }
 
+      // Appel de l'Edge Function dédiée à la création d'articles
       const response = await fetch(
         "https://ddoocgpbnozlgazjojtf.supabase.co/functions/v1/create-article",
         {
@@ -83,6 +105,7 @@ export const useCreateArticle = () => {
       return result.article as Article;
     },
     onSuccess: () => {
+      // Invalidation du cache pour rafraîchir la liste des articles
       queryClient.invalidateQueries({ queryKey: ['articles'] });
       toast({
         title: 'Article créé',
@@ -102,6 +125,10 @@ export const useCreateArticle = () => {
 };
 
 
+/**
+ * Hook pour supprimer un article existant.
+ * @param id L'ID de l'article à supprimer.
+ */
 export const useDeleteArticle = () => {
   const queryClient = useQueryClient();
 
@@ -115,6 +142,7 @@ export const useDeleteArticle = () => {
       if (error) throw error;
     },
     onSuccess: () => {
+      // Invalidation du cache pour mettre à jour l'affichage
       queryClient.invalidateQueries({ queryKey: ["articles"] });
       toast({
         title: "Article supprimé",
