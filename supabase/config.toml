@@ -1,4 +1,4 @@
-project_id = "ddoocgpbnozlgazjojtf"
+project_id = "grtnlwrhmgasaeegnkti"
 
 [functions.create-article]
 verify_jwt = true
