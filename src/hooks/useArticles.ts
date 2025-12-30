@@ -52,20 +52,36 @@ export const useCreateArticle = () => {
 
   return useMutation({
     mutationFn: async (articleData: CreateArticleData) => {
-      const { data, error } = await supabase
-        .from('articles')
-        .insert(articleData)
-        .select()
-        .single();
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-      if (error) {
-        console.error('Insert error:', error);
-        throw error;
+      if (sessionError || !session) {
+        throw new Error('Utilisateur non authentifié');
       }
 
-      return data as Article;
-    },
+      const response = await fetch(
+        "https://ddoocgpbnozlgazjojtf.supabase.co/functions/v1/create-article",
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(articleData),
+        }
+      );
 
+      if (!response.ok) {
+        const err = await response.json();
+        console.error('Edge function error:', err);
+        throw new Error(err.error || 'Erreur lors de la création');
+      }
+
+      const result = await response.json();
+      return result.article as Article;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['articles'] });
       toast({
