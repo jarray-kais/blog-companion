@@ -10,7 +10,6 @@ export interface Article {
   titre: string;
   contenu: string;
   auteur: string;
-  user_id: string; // Lien vers le créateur
   date_creation: string;
 }
 
