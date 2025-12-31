@@ -21,6 +21,7 @@ export type Database = {
           date_creation: string
           id: string
           titre: string
+          user_id: string | null
         }
         Insert: {
           auteur: string
@@ -28,6 +29,7 @@ export type Database = {
           date_creation?: string
           id?: string
           titre: string
+          user_id?: string | null
         }
         Update: {
           auteur?: string
@@ -35,6 +37,7 @@ export type Database = {
           date_creation?: string
           id?: string
           titre?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -43,16 +46,19 @@ export type Database = {
           created_at: string
           full_name: string | null
           id: string
+          role: string
         }
         Insert: {
           created_at?: string
           full_name?: string | null
           id: string
+          role?: string
         }
         Update: {
           created_at?: string
           full_name?: string | null
           id?: string
+          role?: string
         }
         Relationships: []
       }
@@ -194,3 +200,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

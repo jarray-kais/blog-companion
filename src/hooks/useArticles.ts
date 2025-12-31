@@ -8,6 +8,7 @@ export interface Article {
   contenu: string;
   auteur: string;
   date_creation: string;
+  user_id: string;
 }
 
 export interface CreateArticleData {
@@ -52,56 +53,32 @@ export const useCreateArticle = () => {
 
   return useMutation({
     mutationFn: async (articleData: CreateArticleData) => {
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-      console.log(session);
+      // Récupérer le JWT côté front
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) throw new Error("Utilisateur non connecté");
 
-      if (sessionError || !session) {
-        throw new Error('Utilisateur non authentifié');
-      }
+      const accessToken = session.access_token;
 
-      const response = await fetch(
-        "https://grtnlwrhmgasaeegnkti.supabase.co/functions/v1/create-article",
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(articleData),
-        }
-      );
-      console.log(response);
-      if (!response.ok) {
-        const err = await response.json();
-        console.error('Edge function error:', err);
-        throw new Error(err.error || 'Erreur lors de la création');
-      }
+      // Appel de l'Edge Function
+      const { data, error: functionError } = await supabase.functions.invoke('create-article', {
+        body: articleData,
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
 
-      const result = await response.json();
-      return result.article as Article;
+      if (functionError) throw new Error(functionError.message || 'Erreur création article');
+
+      return data.article as Article;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['articles'] });
-      toast({
-        title: 'Article créé',
-        description: 'Votre article a été publié avec succès.',
-      });
+      toast({ title: 'Article créé', description: 'Votre article a été publié avec succès.' });
     },
-
     onError: (error) => {
-      console.error('Error creating article:', error);
-      toast({
-        title: 'Erreur',
-        description: "Impossible de créer l'article. Veuillez réessayer.",
-        variant: 'destructive',
-      });
+      console.error('Erreur création article:', error);
+      toast({ title: 'Erreur', description: "Impossible de créer l'article.", variant: 'destructive' });
     },
   });
 };
-
 
 export const useDeleteArticle = () => {
   const queryClient = useQueryClient();
