@@ -1,0 +1,131 @@
+# .github/workflows/deploy.yml
+# Pipeline CI/CD automatique pour déployer votre application
+
+name: Deploy to Production
+
+# Quand ce pipeline s'exécute
+on:
+  push:
+    branches:
+      - main  # À chaque push sur la branche main
+  pull_request:
+    branches:
+      - main  # À chaque PR vers main
+
+# Variables d'environnement globales
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Job 1: Tests et Build
+  build:
+    name: Build et Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Récupérer le code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Installer Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # 3. Installer les dépendances
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Linter (vérification du code)
+      - name: Run linter
+        run: npm run lint
+        continue-on-error: true  # Continue même si le lint échoue
+
+      # 5. Build du projet
+      - name: Build project
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+
+      # 6. Uploader le build (pour le job suivant)
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  # Job 2: Déployer les Edge Functions sur Supabase
+  deploy-functions:
+    name: Deploy Edge Functions
+    runs-on: ubuntu-latest
+    needs: build  # Attend que le job "build" soit terminé
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Installer Supabase CLI
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Déployer les Edge Functions
+      - name: Deploy create-article function
+        run: |
+          supabase functions deploy create-article --no-verify-jwt --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy delete-article function
+        run: |
+          supabase functions deploy delete-article --no-verify-jwt --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+  # Job 3: Déployer sur Netlify
+  deploy-netlify:
+    name: Deploy to Netlify
+    runs-on: ubuntu-latest
+    needs: build  # Attend que le job "build" soit terminé
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Télécharger le build
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      # Déployer sur Netlify
+      - name: Deploy to Netlify
+        uses: netlify/actions/cli@master
+        with:
+          args: deploy --prod --dir=dist
+        env:
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+
+  # Job 4: Notification de succès
+  notify-success:
+    name: Notify Success
+    runs-on: ubuntu-latest
+    needs: [deploy-functions, deploy-netlify]
+    if: success()
+
+    steps:
+      - name: Success notification
+        run: |
+          echo "🎉 Déploiement réussi !"
+          echo "- Edge Functions déployées"
+          echo "- Application déployée sur Netlify"
+
