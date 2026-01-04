@@ -53,31 +53,62 @@ export const useCreateArticle = () => {
 
   return useMutation({
     mutationFn: async (articleData: CreateArticleData) => {
-      // Récupérer le JWT côté front
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) throw new Error("Utilisateur non connecté");
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error("Vous devez être connecté pour créer un article.");
+      }
 
-      const accessToken = session.access_token;
+      // Explicitly constructing the request to ensure headers are perfect
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-article`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`,
+            "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify(articleData),
+        }
+      );
 
-      // Appel de l'Edge Function
-      const { data, error: functionError } = await supabase.functions.invoke('create-article', {
-        body: articleData,
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      if (!response.ok) {
+        // Log headers for debugging
+        console.error("Failed Request Headers:", {
+            "Authorization": `Bearer ${session.access_token.substring(0, 10)}...`,
+            "apikey": "HIDDEN" 
+        });
 
-      if (functionError) throw new Error(functionError.message || 'Erreur création article');
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+           const err = await response.json();
+           throw new Error(err.error || "Erreur lors de la création de l'article");
+        } else {
+           const text = await response.text();
+           console.error("Non-JSON error response:", text);
+           throw new Error(`Erreur serveur (${response.status}): ${text}`);
+        }
+      }
 
-      return data.article as Article;
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['articles'] });
-      toast({ title: 'Article créé', description: 'Votre article a été publié avec succès.' });
+      toast({
+        title: 'Article créé',
+        description: 'Votre article a été publié avec succès.',
+      });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('Erreur création article:', error);
-      toast({ title: 'Erreur', description: "Impossible de créer l'article.", variant: 'destructive' });
-    },
-  });
+      toast({
+        title: 'Erreur',
+        description: error.message || "Impossible de créer l'article.",
+        variant: 'destructive',
+      });
+    }
+  })
 };
 
 export const useDeleteArticle = () => {
@@ -91,24 +122,38 @@ export const useDeleteArticle = () => {
 
       const accessToken = session.access_token;
 
-      // Appel de l'Edge Function
-      const { data, error: functionError } = await supabase.functions.invoke('delete-article', {
-        body: { id },
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      // Appel de l'Edge Function via fetch pour garantir les headers
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-article`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${accessToken}`,
+            "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ id }),
+        }
+      );
 
-      if (functionError) {
-        throw new Error(functionError.message || 'Erreur suppression article');
+      if (!response.ok) {
+        // Tentative de parsing de l'erreur JSON
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+           const err = await response.json();
+           const errorMsg = err.details ? `${err.error}: ${err.details}` : (err.error || "Erreur lors de la suppression de l'article");
+           const error = new Error(errorMsg) as Error & { statusCode?: number };
+           error.statusCode = response.status;
+           throw error;
+        } else {
+           const text = await response.text();
+           const error = new Error(`Erreur serveur (${response.status}): ${text}`) as Error & { statusCode?: number };
+           error.statusCode = response.status;
+           throw error;
+        }
       }
 
-      // Vérifier si la réponse indique une erreur
-      if (!data || !data.success) {
-        const error = new Error(data?.error || 'Erreur suppression article') as Error & { statusCode?: number };
-        error.statusCode = data?.statusCode || 500;
-        throw error;
-      }
-
-      return data;
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["articles"] });
@@ -121,7 +166,7 @@ export const useDeleteArticle = () => {
       let title = "Erreur";
       let description = "Impossible de supprimer l'article.";
 
-      // Gérer les erreurs selon le code HTTP dans le body de la réponse
+      // Gérer les erreurs selon le code HTTP
       const statusCode = error.statusCode;
       
       if (statusCode === 401) {
@@ -129,13 +174,10 @@ export const useDeleteArticle = () => {
         description = "Vous devez être connecté pour supprimer un article.";
       } else if (statusCode === 403) {
         title = "Accès refusé";
-        description = "Vous n'avez pas les permissions pour supprimer cet article. Vous ne pouvez supprimer que vos propres articles.";
+        description = "Vous n'avez pas les permissions pour supprimer cet article.";
       } else if (statusCode === 404) {
         title = "Article introuvable";
-        description = "L'article que vous essayez de supprimer n'existe pas.";
-      } else if (statusCode === 500) {
-        title = "Erreur serveur";
-        description = "Une erreur est survenue sur le serveur. Veuillez réessayer.";
+        description = "L'article n'existe pas.";
       } else if (error.message) {
         description = error.message;
       }
