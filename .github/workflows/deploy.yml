@@ -111,13 +111,21 @@ jobs:
       - name: Deploy to Netlify
         id: netlify_deploy
         run: |
-          # Install Netlify CLI if not present (although usually available or using npx)
+          # Install Netlify CLI
           npm install -g netlify-cli
+
+          # CRITICAL: Overwrite netlify.toml to remove [build] command.
+          # This prevents Netlify CLI from trying to run "npm run build" (which fails here due to missing deps/env).
+          # We only keep the redirects.
+          echo '[[redirects]]
+            from = "/*"
+            to = "/index.html"
+            status = 200' > netlify.toml
           
           # Deploy and capture JSON output
           netlify deploy --prod --dir=dist --json > deploy_output.json
           
-          # Extract URL using jq (pre-installed on ubuntu-latest)
+          # Extract URL using jq
           NETLIFY_URL=$(jq -r '.deploy_url' deploy_output.json)
           
           # Output for logging
