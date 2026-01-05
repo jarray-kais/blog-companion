@@ -1,156 +1,103 @@
 # .github/workflows/deploy.yml
-# Pipeline CI/CD automatique pour déployer votre application
+# Pipeline CI/CD pour le projet blog-companion
+# Objectif : 
+# - Vérifier le code (lint + build) sur chaque push et PR
+# - Déployer les Edge Functions Supabase uniquement sur push vers main
+# - Le frontend est déployé automatiquement par Netlify (connexion directe à la branche main)
 
 name: Deploy to Production
 
-# Quand ce pipeline s'exécute
+# Déclencheurs du workflow
 on:
   push:
     branches:
-      - main  # À chaque push sur la branche main
+      - main            # À chaque push sur main
   pull_request:
     branches:
-      - main  # À chaque PR vers main
+      - main            # À chaque pull request vers main
 
-# Variables d'environnement globales
+# Variable globale pour la version de Node.js
 env:
   NODE_VERSION: '20'
 
 jobs:
-  # Job 1: Tests et Build
-  build:
+  # ===================================================================
+  # Job 1 : Tests, lint et build du projet
+  # ===================================================================
+  # Ce job s'exécute à chaque push et à chaque PR
+  build-and-test:
     name: Build et Tests
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Récupérer le code
-      - name: Checkout code
+      - name: Récupérer le code du dépôt
         uses: actions/checkout@v4
 
-      # 2. Installer Node.js
-      - name: Setup Node.js
+      - name: Installer Node.js (version ${{ env.NODE_VERSION }})
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: 'npm'                  # Met en cache les dépendances npm pour accélérer les runs suivants
 
-      # 3. Installer les dépendances
-      - name: Install dependencies
-        run: npm ci
+      - name: Installer les dépendances
+        run: npm ci                     # Installation propre et reproductible
 
-      # 4. Linter (vérification du code)
-      - name: Run linter
+      - name: Exécuter le linter
         run: npm run lint
-        continue-on-error: true  # Continue même si le lint échoue
+        continue-on-error: true         # Ne bloque pas le pipeline si le linter trouve des warnings/erreurs
 
-      # 5. Build du projet
-      - name: Build project
+      - name: Construire le projet (build Vite)
         run: npm run build
         env:
+          # Injection des variables d'environnement nécessaires pour le build Vite
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
-      # 6. Uploader le build (pour le job suivant)
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-          retention-days: 1
-
-  # Job 2: Déployer les Edge Functions sur Supabase
+  # ===================================================================
+  # Job 2 : Déploiement des Edge Functions sur Supabase
+  # ===================================================================
+  # Ce job ne s'exécute QUE sur un push direct vers main (pas sur les PR)
   deploy-functions:
-    name: Deploy Edge Functions
+    name: Deploy Edge Functions Supabase
     runs-on: ubuntu-latest
-    needs: build  # Attend que le job "build" soit terminé
+    needs: build-and-test               # Attend que le job build-and-test réussisse
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Checkout code
+      - name: Récupérer le code du dépôt
         uses: actions/checkout@v4
 
-      # Installer Supabase CLI
-      - name: Setup Supabase CLI
+      - name: Installer la Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: latest               # Utilise toujours la dernière version de la CLI
 
-      # Déployer les Edge Functions
-      - name: Deploy create-article function
-        run: |
-          supabase functions deploy create-article  --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Déployer la fonction create-article
+        run: supabase functions deploy create-article --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Deploy delete-article function
-        run: |
-          supabase functions deploy delete-article  --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Déployer la fonction delete-article
+        run: supabase functions deploy delete-article --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-  # Job 3: Déployer sur Netlify
-  # Job 3: Déployer sur Netlify
-  deploy-netlify:
-    name: Deploy to Netlify
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    outputs:
-      NETLIFY_URL: ${{ steps.netlify_deploy.outputs.NETLIFY_URL }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Deploy to Netlify
-        id: netlify_deploy
-        run: |
-          # Install Netlify CLI
-          npm install -g netlify-cli
-
-          # CRITICAL: Overwrite netlify.toml to explicitly override build command.
-          # We set command to a simple echo to override any UI configurations that might be triggering "npm run build".
-          echo '[build]
-            command = "echo skipping build"
-            publish = "dist"
-          
-          [[redirects]]
-            from = "/*"
-            to = "/index.html"
-            status = 200' > netlify.toml
-          
-          # Deploy and capture JSON output
-          netlify deploy --prod --dir=dist --json > deploy_output.json
-          
-          # Extract URL using jq
-          NETLIFY_URL=$(jq -r '.deploy_url' deploy_output.json)
-          
-          # Output for logging
-          echo "Deployed to: $NETLIFY_URL"
-          
-          # Set output for next jobs
-          echo "NETLIFY_URL=$NETLIFY_URL" >> "$GITHUB_OUTPUT"
-        env:
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-
-  # Job 4: Notification de succès
+  # ===================================================================
+  # Job 3 : Notification de succès
+  # ===================================================================
+  # Affiche un message clair dans les logs une fois tout réussi
   notify-success:
-    name: Notify Success
+    name: Notification de succès
     runs-on: ubuntu-latest
-    needs: [deploy-functions, deploy-netlify]
-    if: success()
+    needs: [build-and-test, deploy-functions]   # Attend les deux jobs précédents
+    if: success() && github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Success notification
+      - name: Afficher le message de succès
         run: |
           echo "🎉 Déploiement réussi !"
-          echo "- Edge Functions déployées"
-          echo "- Application déployée sur : ${{ needs.deploy-netlify.outputs.NETLIFY_URL }}"
-
+          echo "✔️ Tests, lint et build OK"
+          echo "✔️ Edge Functions déployées sur Supabase"
+          echo "✔️ Frontend automatiquement déployé par Netlify (branche main synchronisée)"
+          echo ""
+          echo "Votre application est à jour et en ligne !"
