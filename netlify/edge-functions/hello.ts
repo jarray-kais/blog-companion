@@ -1,13 +1,15 @@
-// netlify/edge-functions/hello.ts
-import type { Config } from "@netlify/edge-functions";
+import type { Config, Context } from "@netlify/edge-functions";
 
-export default async () => {
-  return new Response("Hello world depuis Netlify Edge Functions ! 🎉", {
-    headers: { "content-type": "text/html; charset=utf-8" },
-  });
+export default async (request: Request, context: Context) => {
+  const country = context.geo?.country?.name || "Inconnu";
+  const city = context.geo?.city || "Inconnue";
+
+  return new Response(
+    `<h1>Bonjour depuis ${city}, ${country} ! 🌍</h1>`,
+    { headers: { "content-type": "text/html; charset=utf-8" } }
+  );
 };
 
-// Cette config définit sur quel chemin la fonction s'exécute
 export const config: Config = {
-  path: "/api/hello"  // Accès via ton-site.netlify.app/api/hello
+  path: "/api/geo"
 };
