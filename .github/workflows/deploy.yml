@@ -114,10 +114,13 @@ jobs:
           # Install Netlify CLI
           npm install -g netlify-cli
 
-          # CRITICAL: Overwrite netlify.toml to remove [build] command.
-          # This prevents Netlify CLI from trying to run "npm run build" (which fails here due to missing deps/env).
-          # We only keep the redirects.
-          echo '[[redirects]]
+          # CRITICAL: Overwrite netlify.toml to explicitly override build command.
+          # We set command to a simple echo to override any UI configurations that might be triggering "npm run build".
+          echo '[build]
+            command = "echo skipping build"
+            publish = "dist"
+          
+          [[redirects]]
             from = "/*"
             to = "/index.html"
             status = 200' > netlify.toml
