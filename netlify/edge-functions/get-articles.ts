@@ -1,26 +1,34 @@
 import type { Config } from "@netlify/edge-functions";
 
-const SUPABASE_URL = Netlify.env.get("SUPABASE_URL");
-const SUPABASE_ANON_KEY = Netlify.env.get("SUPABASE_ANON_KEY");
 
 export default async () => {
   try {
     const SUPABASE_URL = Netlify.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_KEY = Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const SUPABASE_ANON_KEY = Netlify.env.get("SUPABASE_ANON_KEY");
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return new Response("Config Error", { status: 500 });
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.error("Missing Configuration in get-articles");
+      return new Response(JSON.stringify({ error: "Service Misconfigured" }), { 
+        status: 500, 
+        headers: { "content-type": "application/json" } 
+      });
+    }
 
-    const { id } = await request.json();
-
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${id}`, {
-      method: "DELETE",
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=*&order=date_creation.desc`, {
       headers: {
-        apikey: SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
     });
 
     if (!response.ok) {
+       const err = await response.text();
+       console.error("Supabase Error:", err);
+       return new Response(JSON.stringify({ error: "Failed to fetch articles", details: err }), { status: 500 });
+    }
+
+    const articles = await response.json();
+
     return new Response(JSON.stringify(articles), {
       headers: {
         "content-type": "application/json",
