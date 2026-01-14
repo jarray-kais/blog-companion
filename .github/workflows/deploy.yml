@@ -4,18 +4,27 @@
 # - Vérifier le code (lint + build) sur chaque push et PR
 # - Déployer les Edge Functions Supabase uniquement sur push vers main
 # - Le frontend est déployé automatiquement par Netlify (connexion directe à la branche main)
+# Pipeline CI/CD pour le projet blog-companion
+# Objectif : 
+# - Vérifier le code (lint + build) sur chaque push et PR
+# - Déployer les Edge Functions Supabase uniquement sur push vers main
+# - Le frontend est déployé automatiquement par Netlify (connexion directe à la branche main)
 
 name: Deploy to Production
 
+# Déclencheurs du workflow
 # Déclencheurs du workflow
 on:
   push:
     branches:
       - main            # À chaque push sur main
+      - main            # À chaque push sur main
   pull_request:
     branches:
       - main            # À chaque pull request vers main
+      - main            # À chaque pull request vers main
 
+# Variable globale pour la version de Node.js
 # Variable globale pour la version de Node.js
 env:
   NODE_VERSION: '20'
@@ -32,20 +41,16 @@ jobs:
     steps:
       - name: Récupérer le code du dépôt
         uses: actions/checkout@v4
-
       - name: Installer Node.js (version ${{ env.NODE_VERSION }})
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'                  # Met en cache les dépendances npm pour accélérer les runs suivants
-
       - name: Installer les dépendances
         run: npm ci                     # Installation propre et reproductible
-
       - name: Exécuter le linter
         run: npm run lint
         continue-on-error: true         # Ne bloque pas le pipeline si le linter trouve des warnings/erreurs
-
       - name: Construire le projet (build Vite)
         run: npm run build
         env:
@@ -54,50 +59,18 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
   # ===================================================================
-  # Job 2 : Déploiement des Edge Functions sur Supabase
-  # ===================================================================
-  # Ce job ne s'exécute QUE sur un push direct vers main (pas sur les PR)
-  deploy-functions:
-    name: Deploy Edge Functions Supabase
-    runs-on: ubuntu-latest
-    needs: build-and-test               # Attend que le job build-and-test réussisse
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-      - name: Récupérer le code du dépôt
-        uses: actions/checkout@v4
-
-      - name: Installer la Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest               # Utilise toujours la dernière version de la CLI
-
-      - name: Déployer la fonction create-article
-        run: supabase functions deploy create-article --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Déployer la fonction delete-article
-        run: supabase functions deploy delete-article --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-  # ===================================================================
   # Job 3 : Notification de succès
   # ===================================================================
   # Affiche un message clair dans les logs une fois tout réussi
   notify-success:
     name: Notification de succès
     runs-on: ubuntu-latest
-    needs: [build-and-test, deploy-functions]   # Attend les deux jobs précédents
+    needs: [build-and-test]   # Attend le job de build
     if: success() && github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
       - name: Afficher le message de succès
         run: |
-          echo "🎉 Déploiement réussi !"
+          echo "🎉 CI Passée !"
           echo "✔️ Tests, lint et build OK"
-          echo "✔️ Edge Functions déployées sur Supabase"
-          echo "✔️ Frontend automatiquement déployé par Netlify (branche main synchronisée)"
-          echo ""
-          echo "Votre application est à jour et en ligne !"
+          echo "✔️ Le déploiement est géré automatiquement par Netlify (Git Push)"
