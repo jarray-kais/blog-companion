@@ -6,3 +6,21 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+[dev]
+  command = "npm run dev"
+  targetPort = 5173
+
+[[edge_functions]]
+function = "netlify/edge-functions/get-articles.ts"
+path = "/api/articles"
+
+[[edge_functions]]
+function = "netlify/edge-functions/create-article.ts"
+path = "/api/create-article"
+
+[[edge_functions]]
+function = "netlify/edge-functions/delete-article.ts"
+path = "/api/delete-article"
+
+

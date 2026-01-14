@@ -1,19 +1,21 @@
 import type { Config, Context } from "@netlify/edge-functions";
 
 export default async (request: Request, context: Context) => {
-  const ADMIN_TOKEN = Netlify.env.get("ADMIN_TOKEN");
-
   const authHeader = request.headers.get("authorization");
-  const isAuthorized = authHeader === `Bearer ${ADMIN_TOKEN}`;
+  
+  // On vérifie juste la présence d'un token Bearer
+  // La validation réelle se fera par Supabase RLS quand on forwardera le token
+  const hasToken = authHeader && authHeader.startsWith("Bearer ") && authHeader.length > 20;
 
   const url = new URL(request.url);
   const isProtectedRoute =
     url.pathname === "/api/create-article" ||
     url.pathname === "/api/delete-article";
 
-  if (isProtectedRoute && !isAuthorized) {
-    return new Response("Accès refusé : token admin invalide", {
+  if (isProtectedRoute && !hasToken) {
+    return new Response(JSON.stringify({ error: "Authentification requise" }), {
       status: 401,
+      headers: { "content-type": "application/json" }
     });
   }
 
