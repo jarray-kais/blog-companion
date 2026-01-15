@@ -7,7 +7,7 @@ export default async (req: Request, context: Context) => {
    
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       console.error("Missing SUPABASE_URL or SUPABASE_ANON_KEY");
-      return new Response(JSON.stringify({ error: "Configuration Error", details: "Server configuration missing" }), {
+      return new Response(JSON.stringify({ error: "Erreur de configuration", details: "Configuration serveur manquante" }), {
         status: 500,
         headers: { "content-type": "application/json" }
       });
@@ -32,7 +32,7 @@ export default async (req: Request, context: Context) => {
        }
 
        return new Response(JSON.stringify({ 
-         error: "Failed to fetch articles", 
+         error: "Impossible de récupérer les articles", 
          details: errorDetails 
        }), {
          status: response.status || 500,
@@ -52,7 +52,7 @@ export default async (req: Request, context: Context) => {
   } catch (error: any) {
     console.error("Internal Function Error:", error);
     return new Response(JSON.stringify({ 
-      error: "Internal Server Error", 
+      error: "Erreur interne du serveur", 
       details: error.message 
     }), {
       status: 500,

@@ -21,7 +21,7 @@ serve(async (req: Request) => {
     if (!authHeader) {
       console.error('[Create Article] Missing Authorization header');
       return new Response(
-        JSON.stringify({ error: 'Missing Authorization header' }),
+        JSON.stringify({ error: 'Authentification requise' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -44,7 +44,7 @@ serve(async (req: Request) => {
     if (userError || !user) {
       console.error('[Create Article] Error getting user:', userError);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized', details: userError?.message }),
+        JSON.stringify({ error: 'Session expirée ou invalide', details: userError?.message }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
