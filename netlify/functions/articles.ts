@@ -6,8 +6,8 @@ export default async (req: Request, context: Context) => {
     const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
    
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      console.error("Missing Configuration in get-articles");
-      return new Response(JSON.stringify({ error: "Service Misconfigured" }), {
+      console.error("Missing SUPABASE_URL or SUPABASE_ANON_KEY");
+      return new Response(JSON.stringify({ error: "Configuration Error", details: "Server configuration missing" }), {
         status: 500,
         headers: { "content-type": "application/json" }
       });
@@ -21,10 +21,21 @@ export default async (req: Request, context: Context) => {
     });
 
     if (!response.ok) {
-       const err = await response.text();
-       console.error("Supabase Error:", err);
-       return new Response(JSON.stringify({ error: "Failed to fetch articles", details: err }), {
-         status: 500,
+       const errText = await response.text();
+       console.error("Supabase REST Error:", errText);
+       
+       let errorDetails;
+       try {
+         errorDetails = JSON.parse(errText);
+       } catch {
+         errorDetails = { message: errText };
+       }
+
+       return new Response(JSON.stringify({ 
+         error: "Failed to fetch articles", 
+         details: errorDetails 
+       }), {
+         status: response.status || 500,
          headers: { "content-type": "application/json" }
        });
     }
@@ -39,8 +50,11 @@ export default async (req: Request, context: Context) => {
       },
     });
   } catch (error: any) {
-    console.error("Function Error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error("Internal Function Error:", error);
+    return new Response(JSON.stringify({ 
+      error: "Internal Server Error", 
+      details: error.message 
+    }), {
       status: 500,
       headers: { "content-type": "application/json" }
     });

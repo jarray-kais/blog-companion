@@ -49,8 +49,6 @@ serve(async (req: Request) => {
       );
     }
 
-    console.log(`[Create Article] User authenticated: ${user.id}`);
-
     const { titre, contenu, auteur, user_id } = await req.json();
 
     // Verify payload matches authenticated user (optional but good practice)
