@@ -1,35 +1,32 @@
-import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
+import type { Config, Context } from "@netlify/functions";
 
-export const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+export default async (req: Request, context: Context) => {
   try {
     const SUPABASE_URL = process.env.SUPABASE_URL;
     
     if (!SUPABASE_URL) {
-      return {
-        statusCode: 500,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ error: "Configuration serveur manquante" })
-      };
+      return new Response(JSON.stringify({ error: "Configuration serveur manquante" }), {
+        status: 500,
+        headers: { "content-type": "application/json" }
+      });
     }
 
-    if (event.httpMethod !== "POST") {
-      return {
-        statusCode: 405,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ error: "Méthode non autorisée" })
-      };
+    if (req.method !== "POST") {
+      return new Response(JSON.stringify({ error: "Méthode non autorisée" }), {
+        status: 405,
+        headers: { "content-type": "application/json" }
+      });
     }
 
     // Récupérer les headers d'authentification du client
-    const userAuthHeader = event.headers["authorization"];
-    const userApiKey = event.headers["apikey"];
+    const userAuthHeader = req.headers.get("authorization");
+    const userApiKey = req.headers.get("apikey");
 
     if (!userAuthHeader || !userApiKey) {
-      return {
-        statusCode: 401,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ error: "Authentification manquante" })
-      };
+      return new Response(JSON.stringify({ error: "Authentification manquante" }), {
+        status: 401,
+        headers: { "content-type": "application/json" }
+      });
     }
 
     // Forwarder la requête vers la Supabase Edge Function
@@ -42,23 +39,25 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
         "apikey": userApiKey,
         "Content-Type": "application/json",
       },
-      body: event.body,
+      body: req.body,
     });
 
     const responseBody = await response.text();
     
-    return {
-      statusCode: response.status,
+    return new Response(responseBody, {
+      status: response.status,
       headers: { "content-type": "application/json" },
-      body: responseBody
-    };
+    });
 
   } catch (err: any) {
     console.error("Netlify Proxy Error:", err);
-    return {
-      statusCode: 500,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ error: "Erreur proxy", message: err.message })
-    };
+    return new Response(JSON.stringify({ error: "Erreur proxy", message: err.message }), {
+      status: 500,
+      headers: { "content-type": "application/json" }
+    });
   }
+};
+
+export const config: Config = {
+  path: "/api/create-article",
 };

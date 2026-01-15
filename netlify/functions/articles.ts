@@ -1,17 +1,16 @@
-import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
+import type { Config, Context } from "@netlify/functions";
 
-export const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+export default async (req: Request, context: Context) => {
   try {
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
    
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       console.error("Missing Configuration in get-articles");
-      return {
-        statusCode: 500,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ error: "Service Misconfigured" })
-      };
+      return new Response(JSON.stringify({ error: "Service Misconfigured" }), {
+        status: 500,
+        headers: { "content-type": "application/json" }
+      });
     }
 
     const response = await fetch(`${SUPABASE_URL}/rest/v1/articles?select=*&order=date_creation.desc`, {
@@ -24,29 +23,30 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
     if (!response.ok) {
        const err = await response.text();
        console.error("Supabase Error:", err);
-       return {
-         statusCode: 500,
-         headers: { "content-type": "application/json" },
-         body: JSON.stringify({ error: "Failed to fetch articles", details: err })
-       };
+       return new Response(JSON.stringify({ error: "Failed to fetch articles", details: err }), {
+         status: 500,
+         headers: { "content-type": "application/json" }
+       });
     }
 
     const articles = await response.json();
 
-    return {
-      statusCode: 200,
+    return new Response(JSON.stringify(articles), {
+      status: 200,
       headers: {
         "content-type": "application/json",
         "cache-control": "public, max-age=0, s-maxage=300",
       },
-      body: JSON.stringify(articles)
-    };
+    });
   } catch (error: any) {
     console.error("Function Error:", error);
-    return {
-      statusCode: 500,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ error: error.message })
-    };
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "content-type": "application/json" }
+    });
   }
+};
+
+export const config: Config = {
+  path: "/api/articles",
 };
