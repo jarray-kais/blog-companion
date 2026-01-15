@@ -17,71 +17,78 @@ export interface CreateArticleData {
   auteur: string;
 }
 
-// 1. Lire tous les articles (via Netlify Edge Function avec Cache)
 export const useArticles = () => {
   return useQuery({
     queryKey: ["articles"],
     queryFn: async () => {
-      const response = await fetch("/api/articles");
-      if (!response.ok) {
-        throw new Error("Erreur lors du chargement des articles");
+      // Pour la lecture, on utilise l'API REST standard de Supabase (plus simple/rapide)
+      // Pas besoin de Netlify Functions pour ça
+      const { data, error } = await supabase
+        .from("articles")
+        .select("*")
+        .order("date_creation", { ascending: false });
+
+      if (error) {
+        throw new Error(error.message);
       }
-      return response.json() as Promise<Article[]>;
+      return data as Article[];
     },
   });
 };
 
-// 2. Lire un article par ID (on réutilise le cache global de la liste)
 export const useArticle = (id: string) => {
   return useQuery({
     queryKey: ["articles", id],
     queryFn: async () => {
-      const response = await fetch("/api/articles");
-      if (!response.ok) throw new Error("Erreur chargement");
-      const articles = await response.json() as Article[];
-      return articles.find((a) => a.id === id) || null;
+      const { data, error } = await supabase
+        .from("articles")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (error) throw error;
+      return data as Article;
     },
     enabled: !!id,
   });
 };
 
-// 3. Créer un article (via Netlify Edge Function + User Token)
 export const useCreateArticle = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (articleData: CreateArticleData) => {
-      // Récupérer la session utilisateur réelle
+      // 1. Authentification Check
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (!session) {
         throw new Error("Vous devez être connecté pour publier.");
       }
 
-      const response = await fetch("/api/create-article", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          // On envoie le vrai token JWT de l'utilisateur
-          "Authorization": `Bearer ${session.access_token}`,
-          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify(articleData),
+      // 2. Appel direct à la Supabase Edge Function
+      const { data, error } = await supabase.functions.invoke('create-article', {
+        body: articleData,
       });
 
-      if (!response.ok) {
-        // Gestion robuste des erreurs (JSON ou Texte)
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-           const err = await response.json();
-           throw new Error(err.error || "Erreur lors de la création");
-        } else {
-           const text = await response.text();
-           throw new Error(text || "Erreur serveur");
+      if (error) {
+        // Le message d'erreur est souvent dans error.context.statusText ou error.message
+        // Supabase JS wrapper errors can be tricky, we try to extract details
+        let details = error.message;
+        
+        // Si la fonction a renvoyé un JSON d'erreur structuré
+        if (error instanceof Error && 'context' in error) {
+            // @ts-ignore
+            const context = error.context as Response;
+            if (context) {
+              try {
+                const json = await context.json();
+                details = json.error || json.message || details;
+              } catch (e) { /* ignore json parse error */ }
+            }
         }
+        throw new Error(details || "Impossible de créer l'article");
       }
 
-      return response.json();
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["articles"] });
@@ -90,17 +97,16 @@ export const useCreateArticle = () => {
         description: "Votre article est en ligne ! 🚀",
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
-        title: "Alerte",
+        title: "Erreur",
         description: error.message,
         variant: "destructive",
       });
-    }
+    },
   });
 };
 
-// 4. Supprimer un article (via Netlify Edge Function + User Token)
 export const useDeleteArticle = () => {
   const queryClient = useQueryClient();
 
@@ -109,29 +115,25 @@ export const useDeleteArticle = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Vous devez être connecté pour supprimer.");
 
-      const response = await fetch("/api/delete-article", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ id }),
+      const { data, error } = await supabase.functions.invoke('delete-article', {
+        body: { id },
       });
 
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-           const err = await response.json();
-           // On lance une erreur avec le message précis du backend (ex: "Tu n'as pas effacé...")
-           throw new Error(err.error || "Erreur suppression");
-        } else {
-           const text = await response.text();
-           throw new Error(text || "Erreur suppression");
-        }
+      if (error) {
+        let details = error.message;
+        // Tenter de parser le message JSON renvoyé par la fonction
+         // @ts-ignore
+         if (error && error.context) {
+             try {
+               // @ts-ignore
+               const json = await error.context.json();
+               details = json.error || json.message || details;
+             } catch(e) {}
+         }
+        throw new Error(details || "Erreur lors de la suppression");
       }
 
-      return true;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["articles"] });
@@ -140,12 +142,12 @@ export const useDeleteArticle = () => {
         variant: "destructive",
       });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
-        title: "Alerte",
-        description: error.message, // Affichera le message spécifique du backend
+        title: "Erreur",
+        description: error.message,
         variant: "destructive",
       });
-    }
+    },
   });
 };

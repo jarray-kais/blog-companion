@@ -1,0 +1,20 @@
+# On utilise Node.js version 18 (légère)
+FROM node:18-alpine
+
+# On se place dans le dossier /app du container
+WORKDIR /app
+
+# On copie package.json et package-lock.json
+COPY package*.json ./
+
+# On installe les dépendances
+RUN npm install
+
+# On copie tout le code source
+COPY . .
+
+# On expose le port 5173 (Port par défaut de Vite)
+EXPOSE 5173
+
+# On lance le serveur de développement
+CMD ["npm", "run", "dev"]

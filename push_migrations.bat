@@ -1,6 +1,6 @@
 @echo off
 echo Linking Supabase project...
-call npx supabase link --project-ref ddoocgpbnozlgazjojtf --password "PlaceHolderPasswordIfNeededOrItWillPrompt" 2>nul
+call npx supabase link --project-ref grtnlwrhmgasaeegnkti --password "PlaceHolderPasswordIfNeededOrItWillPrompt" 2>nul
 if %ERRORLEVEL% NEQ 0 (
     echo Link failed or already linked. Continuing...
 )
